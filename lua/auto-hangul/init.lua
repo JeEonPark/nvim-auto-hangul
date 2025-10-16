@@ -65,36 +65,38 @@ local function compose_hangul(cho, jung, jong)
   return vim.fn.nr2char(((cho * 21 + jung) * 28 + jong + 1) + 0xAC00)
 end
 
+-- Get consonant with case fallback
+local function get_consonant(c)
+  if CONS_MAP[c] then
+    return CONS_MAP[c]
+  elseif CONS_MAP[c:lower()] then
+    return CONS_MAP[c:lower()]
+  end
+  return nil
+end
+
+-- Get vowel with case fallback
+local function get_vowel(c)
+  if VOWEL_MAP[c] then
+    return VOWEL_MAP[c]
+  elseif VOWEL_MAP[c:lower()] then
+    return VOWEL_MAP[c:lower()]
+  end
+  return nil
+end
+
 -- Check if key is a consonant key
 local function is_consonant_key(c)
-  return CONS_MAP[c] ~= nil
+  return get_consonant(c) ~= nil
 end
 
 -- Check if key is a vowel key
 local function is_vowel_key(c)
-  return VOWEL_MAP[c] ~= nil
+  return get_vowel(c) ~= nil
 end
 
--- Check if word can be converted to Hangul (must have at least one Korean pattern)
-local function can_be_hangul(word)
-  -- Check if there's at least one consonant followed by a vowel
-  for i = 1, #word - 1 do
-    local c = word:sub(i, i)
-    local next_c = word:sub(i + 1, i + 1)
-    if is_consonant_key(c) and is_vowel_key(next_c) then
-      return true
-    end
-  end
-  return false
-end
-
--- Korean romanization to Hangul conversion
-local function roman_to_hangul(word)
-  -- If word cannot be Hangul, return as-is
-  if not can_be_hangul(word) then
-    return word
-  end
-
+-- Try to convert word to Hangul, returns converted string and number of chars consumed
+local function try_convert_hangul(word)
   local result = {}
   local i = 1
   local len = #word
@@ -104,7 +106,7 @@ local function roman_to_hangul(word)
 
     -- Must start with consonant
     if is_consonant_key(c) then
-      local cho = CONS_MAP[c]
+      local cho = get_consonant(c)
       local start_i = i
       i = i + 1
 
@@ -112,20 +114,21 @@ local function roman_to_hangul(word)
       local jung = nil
       local vowel_len = 0
 
-      -- Try 2-char vowel first
+      -- Try 2-char vowel first (with case-insensitive)
       if i + 1 <= len then
         local two_char = word:sub(i, i + 1)
-        if VOWEL_MAP[two_char] then
-          jung = VOWEL_MAP[two_char]
+        local two_char_lower = two_char:lower()
+        if VOWEL_MAP[two_char_lower] then
+          jung = VOWEL_MAP[two_char_lower]
           vowel_len = 2
         end
       end
 
-      -- Try 1-char vowel
+      -- Try 1-char vowel (with case fallback)
       if not jung and i <= len then
         local one_char = word:sub(i, i)
-        if VOWEL_MAP[one_char] then
-          jung = VOWEL_MAP[one_char]
+        jung = get_vowel(one_char)
+        if jung then
           vowel_len = 1
         end
       end
@@ -137,27 +140,29 @@ local function roman_to_hangul(word)
         local jong = nil
         local jong_len = 0
 
-        -- Try 2-char final consonant
+        -- Try 2-char final consonant (with case-insensitive)
         if i + 1 <= len then
           local two_char = word:sub(i, i + 1)
-          if CONS_MAP[two_char] then
+          local two_char_lower = two_char:lower()
+          if CONS_MAP[two_char_lower] then
             -- Check if next char is a vowel (if so, this is next syllable's cho)
             local next_pos = i + 2
             if next_pos > len or not is_vowel_key(word:sub(next_pos, next_pos)) then
-              jong = CONS_MAP[two_char]
+              jong = CONS_MAP[two_char_lower]
               jong_len = 2
             end
           end
         end
 
-        -- Try 1-char final consonant
+        -- Try 1-char final consonant (with case fallback)
         if not jong and i <= len then
           local one_char = word:sub(i, i)
-          if CONS_MAP[one_char] then
+          local jong_candidate = get_consonant(one_char)
+          if jong_candidate then
             -- Check if next char is a vowel (if so, this is next syllable's cho)
             local next_pos = i + 1
             if next_pos > len or not is_vowel_key(word:sub(next_pos, next_pos)) then
-              jong = CONS_MAP[one_char]
+              jong = jong_candidate
               jong_len = 1
             end
           end
@@ -175,21 +180,35 @@ local function roman_to_hangul(word)
         if cho_idx and jung_idx then
           table.insert(result, compose_hangul(cho_idx, jung_idx, jong_idx))
         else
-          -- Fallback: just add the original characters
-          table.insert(result, c)
+          -- Failed to compose, return nil to indicate failure
+          return nil, 0
         end
       else
-        -- No vowel found, add original character and continue
-        table.insert(result, c)
+        -- No vowel found after consonant, cannot be Hangul
+        return nil, 0
       end
     else
-      -- Not a consonant key, just add it
-      table.insert(result, c)
-      i = i + 1
+      -- Starts with non-consonant (vowel or other), cannot be Hangul
+      return nil, 0
     end
   end
 
-  return table.concat(result)
+  -- Successfully converted entire word
+  return table.concat(result), i - 1
+end
+
+-- Korean romanization to Hangul conversion
+local function roman_to_hangul(word)
+  -- Try to convert the entire word
+  local converted, chars_consumed = try_convert_hangul(word)
+
+  -- Only return converted if entire word was consumed
+  if converted and chars_consumed == #word then
+    return converted
+  end
+
+  -- Otherwise, return original word (it's probably English)
+  return word
 end
 
 -- Get last word before cursor
