@@ -285,15 +285,17 @@ vim.keymap.set("i", "k", function()
   local current_time = vim.loop.now()
   local time_diff = current_time - last_key_time
 
+  local line = vim.api.nvim_get_current_line()
+  local col = vim.fn.col(".")
+  local before = line:sub(1, col - 1)
+
   -- Check for fast 'kk'
-  if last_key_char == "k" and time_diff <= TOGGLE_THRESHOLD then
-    -- Remove the previous 'k'
-    local line = vim.api.nvim_get_current_line()
-    local col = vim.fn.col(".")
-    local before = line:sub(1, col - 2)
+  if last_key_char == "k" and time_diff <= TOGGLE_THRESHOLD and before:sub(-1) == "k" then
+    -- Remove the previous 'k' (don't insert current 'k')
+    before = before:sub(1, -2)
     local after = line:sub(col)
     vim.api.nvim_set_current_line(before .. after)
-    vim.fn.cursor(0, col - 1)
+    vim.fn.cursor(0, #before + 1)
 
     -- Toggle to Hangul mode
     hangul_mode = true
@@ -314,15 +316,17 @@ vim.keymap.set("i", "e", function()
   local current_time = vim.loop.now()
   local time_diff = current_time - last_key_time
 
+  local line = vim.api.nvim_get_current_line()
+  local col = vim.fn.col(".")
+  local before = line:sub(1, col - 1)
+
   -- Check for fast 'ee'
-  if last_key_char == "e" and time_diff <= TOGGLE_THRESHOLD then
-    -- Remove the previous 'e'
-    local line = vim.api.nvim_get_current_line()
-    local col = vim.fn.col(".")
-    local before = line:sub(1, col - 2)
+  if last_key_char == "e" and time_diff <= TOGGLE_THRESHOLD and before:sub(-1) == "e" then
+    -- Remove the previous 'e' (don't insert current 'e')
+    before = before:sub(1, -2)
     local after = line:sub(col)
     vim.api.nvim_set_current_line(before .. after)
-    vim.fn.cursor(0, col - 1)
+    vim.fn.cursor(0, #before + 1)
 
     -- Toggle to English mode
     hangul_mode = false
