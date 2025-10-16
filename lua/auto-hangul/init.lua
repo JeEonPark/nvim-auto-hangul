@@ -242,26 +242,45 @@ function M.convert_last_word()
   vim.fn.cursor(0, new_col)
 end
 
--- Keymap: trigger conversion with 'kk'
+-- Convert all words in text to Hangul
+local function convert_text_to_hangul(text)
+  local result = {}
+
+  -- Split by spaces and convert each word
+  for word in text:gmatch("%S+") do
+    local converted = roman_to_hangul(word)
+    table.insert(result, converted)
+  end
+
+  return table.concat(result, " ")
+end
+
+-- Keymap: trigger conversion with 'kk...kk'
 vim.keymap.set("i", "k", function()
   local line = vim.api.nvim_get_current_line()
   local col = vim.fn.col(".")
   local before = line:sub(1, col - 1)
 
-  -- Check if last character is 'k'
+  -- Check if last character is 'k' (this would be second 'k')
   if before:sub(-1) == "k" then
-    -- This is the second 'k', trigger conversion
-    -- Get word before the first 'k'
+    -- Look for opening 'kk' before this position
     local before_first_k = before:sub(1, -2)
-    local word = before_first_k:match("([%w]+)$") or ""
 
-    if word ~= "" then
-      local converted = roman_to_hangul(word)
+    -- Find the last occurrence of 'kk' before current position
+    local start_pos = before_first_k:reverse():find("kk")
 
-      -- Only convert if it's different (valid Hangul conversion)
-      if converted ~= word then
-        -- Remove the word and both 'k's, then insert converted
-        local start_pos = #before_first_k - #word
+    if start_pos then
+      -- Calculate actual position (reverse search)
+      start_pos = #before_first_k - start_pos - 1
+
+      -- Extract text between kk markers
+      local text_between = before_first_k:sub(start_pos + 3) -- +3 to skip the 'kk'
+
+      if text_between ~= "" then
+        -- Convert the text
+        local converted = convert_text_to_hangul(text_between)
+
+        -- Replace 'kk...text...kk' with converted text
         local after = line:sub(col)
         local new_line = before_first_k:sub(1, start_pos) .. converted .. after
 
