@@ -250,70 +250,84 @@ local TOGGLE_THRESHOLD = 300 -- milliseconds
 
 -- Toggle Hangul mode with 'kk'
 vim.keymap.set("i", "k", function()
-  local current_time = vim.loop.now()
-  local time_since_last_k = current_time - last_k_time
-
-  -- Check if this is the second 'k' within threshold
-  if time_since_last_k <= TOGGLE_THRESHOLD and time_since_last_k > 0 then
-    -- This is fast 'kk', remove previous 'k' and toggle mode
-    local line = vim.api.nvim_get_current_line()
-    local col = vim.fn.col(".")
-
-    -- Remove the previous 'k'
-    if col > 1 and line:sub(col - 1, col - 1) == "k" then
-      local before = line:sub(1, col - 2)
-      local after = line:sub(col)
-      vim.api.nvim_set_current_line(before .. after)
-      vim.fn.cursor(0, col - 1)
-
-      -- Toggle to Hangul mode
-      hangul_mode = true
-      vim.notify("Hangul Mode", vim.log.levels.INFO)
-
-      last_k_time = 0  -- Reset
-      return
-    end
-  end
-
-  -- Normal 'k' input
-  last_k_time = current_time
+  -- First, insert the 'k'
   vim.api.nvim_feedkeys("k", "n", true)
+
+  -- Then check for fast 'kk'
+  vim.schedule(function()
+    local current_time = vim.loop.now()
+    local time_since_last_k = current_time - last_k_time
+
+    -- Check if this is the second 'k' within threshold
+    if time_since_last_k <= TOGGLE_THRESHOLD and time_since_last_k > 0 then
+      local line = vim.api.nvim_get_current_line()
+      local col = vim.fn.col(".")
+
+      -- Check if last two characters are 'kk'
+      if col > 1 and line:sub(col - 2, col - 1) == "kk" then
+        -- Remove both 'k's
+        local before = line:sub(1, col - 3)
+        local after = line:sub(col)
+        vim.api.nvim_set_current_line(before .. after)
+        vim.fn.cursor(0, #before + 1)
+
+        -- Toggle to Hangul mode
+        hangul_mode = true
+        vim.notify("Hangul Mode", vim.log.levels.INFO)
+
+        last_k_time = 0
+        return
+      end
+    end
+
+    -- Update last k time
+    last_k_time = current_time
+  end)
 end, { noremap = true, silent = true })
 
 -- Toggle English mode with 'ee'
 vim.keymap.set("i", "e", function()
-  local current_time = vim.loop.now()
-  local time_since_last_e = current_time - last_e_time
-
-  -- Check if this is the second 'e' within threshold
-  if time_since_last_e <= TOGGLE_THRESHOLD and time_since_last_e > 0 then
-    -- This is fast 'ee', remove previous 'e' and toggle mode
-    local line = vim.api.nvim_get_current_line()
-    local col = vim.fn.col(".")
-
-    -- Remove the previous 'e'
-    if col > 1 and line:sub(col - 1, col - 1) == "e" then
-      local before = line:sub(1, col - 2)
-      local after = line:sub(col)
-      vim.api.nvim_set_current_line(before .. after)
-      vim.fn.cursor(0, col - 1)
-
-      -- Toggle to English mode
-      hangul_mode = false
-      vim.notify("English Mode", vim.log.levels.INFO)
-
-      last_e_time = 0  -- Reset
-      return
-    end
-  end
-
-  -- Normal 'e' input
-  last_e_time = current_time
+  -- First, insert the 'e'
   vim.api.nvim_feedkeys("e", "n", true)
+
+  -- Then check for fast 'ee'
+  vim.schedule(function()
+    local current_time = vim.loop.now()
+    local time_since_last_e = current_time - last_e_time
+
+    -- Check if this is the second 'e' within threshold
+    if time_since_last_e <= TOGGLE_THRESHOLD and time_since_last_e > 0 then
+      local line = vim.api.nvim_get_current_line()
+      local col = vim.fn.col(".")
+
+      -- Check if last two characters are 'ee'
+      if col > 1 and line:sub(col - 2, col - 1) == "ee" then
+        -- Remove both 'e's
+        local before = line:sub(1, col - 3)
+        local after = line:sub(col)
+        vim.api.nvim_set_current_line(before .. after)
+        vim.fn.cursor(0, #before + 1)
+
+        -- Toggle to English mode
+        hangul_mode = false
+        vim.notify("English Mode", vim.log.levels.INFO)
+
+        last_e_time = 0
+        return
+      end
+    end
+
+    -- Update last e time
+    last_e_time = current_time
+  end)
 end, { noremap = true, silent = true })
 
 -- Auto-convert on Space in Hangul mode
 vim.keymap.set("i", "<Space>", function()
+  -- Reset key timers when Space is pressed
+  last_k_time = 0
+  last_e_time = 0
+
   if hangul_mode then
     -- Get the last word
     local line = vim.api.nvim_get_current_line()
@@ -324,15 +338,13 @@ vim.keymap.set("i", "<Space>", function()
     if word ~= "" then
       local converted = roman_to_hangul(word)
 
-      if converted ~= word then
-        -- Replace the word
-        local start_pos = #before - #word
-        local after = line:sub(col)
-        local new_line = before:sub(1, start_pos) .. converted .. after
+      -- Always replace, even if conversion failed or is same
+      local start_pos = #before - #word
+      local after = line:sub(col)
+      local new_line = before:sub(1, start_pos) .. converted .. after
 
-        vim.api.nvim_set_current_line(new_line)
-        vim.fn.cursor(0, start_pos + #converted + 1)
-      end
+      vim.api.nvim_set_current_line(new_line)
+      vim.fn.cursor(0, start_pos + #converted + 1)
     end
   end
 
