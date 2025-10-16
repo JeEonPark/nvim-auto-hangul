@@ -242,10 +242,41 @@ function M.convert_last_word()
   vim.fn.cursor(0, new_col)
 end
 
--- 매핑
-vim.keymap.set("i", "<Space>", function()
-  M.convert_last_word()
-  vim.api.nvim_feedkeys(" ", "n", true)
+-- Keymap: trigger conversion with 'kk'
+vim.keymap.set("i", "k", function()
+  local line = vim.api.nvim_get_current_line()
+  local col = vim.fn.col(".")
+  local before = line:sub(1, col - 1)
+
+  -- Check if last character is 'k'
+  if before:sub(-1) == "k" then
+    -- This is the second 'k', trigger conversion
+    -- Get word before the first 'k'
+    local before_first_k = before:sub(1, -2)
+    local word = before_first_k:match("([%w]+)$") or ""
+
+    if word ~= "" then
+      local converted = roman_to_hangul(word)
+
+      -- Only convert if it's different (valid Hangul conversion)
+      if converted ~= word then
+        -- Remove the word and both 'k's, then insert converted
+        local start_pos = #before_first_k - #word
+        local after = line:sub(col)
+        local new_line = before_first_k:sub(1, start_pos) .. converted .. after
+
+        vim.api.nvim_set_current_line(new_line)
+
+        -- Set cursor after converted text
+        local new_col = start_pos + #converted + 1
+        vim.fn.cursor(0, new_col)
+        return
+      end
+    end
+  end
+
+  -- Default: just insert 'k'
+  vim.api.nvim_feedkeys("k", "n", true)
 end, { noremap = true, silent = true })
 
 return M
