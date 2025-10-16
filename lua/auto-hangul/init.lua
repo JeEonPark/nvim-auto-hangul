@@ -1,20 +1,24 @@
 local M = {}
 
 ---------------------------------------------------------------------
--- 🔡 두벌식 매핑
+-- 두벌식 키보드 매핑
 ---------------------------------------------------------------------
 local CONSONANTS = {
-  r="ㄱ", R="ㄲ", s="ㄴ", e="ㄷ", E="ㄸ", f="ㄹ", a="ㅁ", q="ㅂ", Q="ㅃ",
-  t="ㅅ", T="ㅆ", d="ㅇ", w="ㅈ", W="ㅉ", c="ㅊ", z="ㅋ", x="ㅌ", v="ㅍ", g="ㅎ"
+  r="ㄱ", R="ㄲ", s="ㄴ", e="ㄷ", E="ㄸ", f="ㄹ", a="ㅁ",
+  q="ㅂ", Q="ㅃ", t="ㅅ", T="ㅆ", d="ㅇ", w="ㅈ", W="ㅉ",
+  c="ㅊ", z="ㅋ", x="ㅌ", v="ㅍ", g="ㅎ"
 }
 
 local VOWELS = {
   k="ㅏ", o="ㅐ", i="ㅑ", O="ㅒ", j="ㅓ", p="ㅔ", u="ㅕ", P="ㅖ",
-  h="ㅗ", hk="ㅘ", ho="ㅙ", hl="ㅚ", y="ㅛ",
-  n="ㅜ", nj="ㅝ", np="ㅞ", nl="ㅟ",
+  h="ㅗ", hk="ㅘ", ho="ㅙ", hl="ㅚ",
+  y="ㅛ", n="ㅜ", nj="ㅝ", np="ㅞ", nl="ㅟ",
   b="ㅠ", m="ㅡ", ml="ㅢ", l="ㅣ"
 }
 
+---------------------------------------------------------------------
+-- 유니코드 조합 테이블
+---------------------------------------------------------------------
 local CHO = { ["ㄱ"]=0,["ㄲ"]=1,["ㄴ"]=2,["ㄷ"]=3,["ㄸ"]=4,["ㄹ"]=5,["ㅁ"]=6,["ㅂ"]=7,["ㅃ"]=8,
               ["ㅅ"]=9,["ㅆ"]=10,["ㅇ"]=11,["ㅈ"]=12,["ㅉ"]=13,["ㅊ"]=14,["ㅋ"]=15,["ㅌ"]=16,
               ["ㅍ"]=17,["ㅎ"]=18 }
@@ -34,36 +38,36 @@ local function compose(cho,jung,jong)
 end
 
 ---------------------------------------------------------------------
--- 🧠 간단한 두벌식 조합 (문자열 → 한글)
+-- 두벌식 로마자 → 한글 변환
 ---------------------------------------------------------------------
 local function roman_to_hangul(input)
   local result = {}
-  local i=1
+  local i = 1
   while i <= #input do
     local c = input:sub(i,i)
     local cho = CONSONANTS[c]
     if not cho then
-      table.insert(result,c)
-      i=i+1
+      table.insert(result, c)
+      i = i + 1
     else
-      i=i+1
+      i = i + 1
       local jung, jong
       local two = input:sub(i,i+1)
       local one = input:sub(i,i)
-      if VOWELS[two] then jung=VOWELS[two]; i=i+2
-      elseif VOWELS[one] then jung=VOWELS[one]; i=i+1 end
+      if VOWELS[two] then jung = VOWELS[two]; i = i + 2
+      elseif VOWELS[one] then jung = VOWELS[one]; i = i + 1 end
       if not jung then
-        table.insert(result,cho)
+        table.insert(result, cho)
       else
         local next_c = input:sub(i,i)
         if CONSONANTS[next_c] then
           local nn = input:sub(i+1,i+1)
-          if nn=="" or not VOWELS[nn] then
+          if nn == "" or not VOWELS[nn] then
             jong = CONSONANTS[next_c]
-            i=i+1
+            i = i + 1
           end
         end
-        table.insert(result,compose(CHO[cho],JUNG[jung],jong and JONG[jong] or -1))
+        table.insert(result, compose(CHO[cho], JUNG[jung], jong and JONG[jong] or -1))
       end
     end
   end
@@ -71,94 +75,106 @@ local function roman_to_hangul(input)
 end
 
 ---------------------------------------------------------------------
--- 🔍 단어 추출 + 변환
+-- 커서 앞 단어 변환
 ---------------------------------------------------------------------
 local function get_last_word()
   local line = vim.api.nvim_get_current_line()
   local col = vim.fn.col(".")
-  local before = line:sub(1,col-1)
+  local before = line:sub(1, col - 1)
   local word = before:match("([%w]+)$") or ""
   return word, #before - #word
 end
 
 function M.convert_last_word()
   local word, start = get_last_word()
-  if word=="" or #word>20 then return end
+  if word == "" then return end
   local converted = roman_to_hangul(word)
   if converted == word then return end
   local line = vim.api.nvim_get_current_line()
   local col = vim.fn.col(".")
-  local before = line:sub(1,start)
+  local before = line:sub(1, start)
   local after = line:sub(col)
-  vim.api.nvim_set_current_line(before..converted..after)
-  vim.fn.cursor(0,start+#converted+1)
+  vim.api.nvim_set_current_line(before .. converted .. after)
+  vim.api.nvim_win_set_cursor(0, { vim.fn.line("."), start + #converted + 1 })
 end
 
 ---------------------------------------------------------------------
--- 🇰🇷 모드 전환 (kk / ee)
+-- 모드 전환
 ---------------------------------------------------------------------
 local hangul_mode = false
 local last_k, last_e = 0, 0
 local THRESHOLD = 300
 local function now_ms() return math.floor(vim.loop.hrtime()/1e6) end
 
-vim.keymap.set("i","k",function()
-  vim.api.nvim_feedkeys("k","n",true)
+vim.keymap.set("i", "k", function()
+  vim.api.nvim_feedkeys("k", "n", true)
   vim.schedule(function()
-    local t=now_ms()
-    if t-last_k<=THRESHOLD then
-      local line=vim.api.nvim_get_current_line()
-      local col=vim.fn.col(".")
-      if col>2 and line:sub(col-2,col-1)=="kk" then
-        local before=line:sub(1,col-3)
-        local after=line:sub(col)
-        vim.api.nvim_set_current_line(before..after)
-        vim.fn.cursor(0,#before+1)
-        hangul_mode=true
-        vim.notify("Hangul Mode",vim.log.levels.INFO)
+    local t = now_ms()
+    if t - last_k <= THRESHOLD then
+      local line = vim.api.nvim_get_current_line()
+      local col = vim.fn.col(".")
+      if col > 2 and line:sub(col - 2, col - 1) == "kk" then
+        local before = line:sub(1, col - 3)
+        local after = line:sub(col)
+        vim.api.nvim_set_current_line(before .. after)
+        vim.fn.cursor(0, #before + 1)
+        hangul_mode = true
+        vim.notify("Hangul Mode", vim.log.levels.INFO)
       end
-      last_k=0
+      last_k = 0
     else
-      last_k=t
+      last_k = t
     end
   end)
-end,{noremap=true,silent=true})
+end, { noremap = true, silent = true })
 
-vim.keymap.set("i","e",function()
-  vim.api.nvim_feedkeys("e","n",true)
+vim.keymap.set("i", "e", function()
+  vim.api.nvim_feedkeys("e", "n", true)
   vim.schedule(function()
-    local t=now_ms()
-    if t-last_e<=THRESHOLD then
-      local line=vim.api.nvim_get_current_line()
-      local col=vim.fn.col(".")
-      if col>2 and line:sub(col-2,col-1)=="ee" then
-        local before=line:sub(1,col-3)
-        local after=line:sub(col)
-        vim.api.nvim_set_current_line(before..after)
-        vim.fn.cursor(0,#before+1)
-        hangul_mode=false
-        vim.notify("English Mode",vim.log.levels.INFO)
+    local t = now_ms()
+    if t - last_e <= THRESHOLD then
+      local line = vim.api.nvim_get_current_line()
+      local col = vim.fn.col(".")
+      if col > 2 and line:sub(col - 2, col - 1) == "ee" then
+        local before = line:sub(1, col - 3)
+        local after = line:sub(col)
+        vim.api.nvim_set_current_line(before .. after)
+        vim.fn.cursor(0, #before + 1)
+        hangul_mode = false
+        vim.notify("English Mode", vim.log.levels.INFO)
       end
-      last_e=0
+      last_e = 0
     else
-      last_e=t
+      last_e = t
     end
   end)
-end,{noremap=true,silent=true})
+end, { noremap = true, silent = true })
 
 ---------------------------------------------------------------------
--- ⚙️ 스페이스키 자동 변환
+-- 스페이스 누를 때 변환 (무한 루프 X)
 ---------------------------------------------------------------------
-vim.keymap.set("i","<Space>",function()
+vim.keymap.set("i", "<Space>", function()
   if hangul_mode then
     M.convert_last_word()
   end
-  vim.api.nvim_feedkeys(" ","i",false)
-end,{noremap=true,silent=true})
 
-vim.api.nvim_create_autocmd("InsertLeave",{callback=function()
-  hangul_mode=false
-  last_k,last_e=0,0
-end})
+  -- 스페이스 직접 삽입 (feedkeys 사용 X)
+  local row, col = unpack(vim.api.nvim_win_get_cursor(0))
+  local line = vim.api.nvim_get_current_line()
+  local before = line:sub(1, col)
+  local after = line:sub(col + 1)
+  vim.api.nvim_set_current_line(before .. " " .. after)
+  vim.api.nvim_win_set_cursor(0, { row, col + 1 })
+end, { noremap = true, silent = true })
+
+---------------------------------------------------------------------
+-- InsertLeave 시 초기화
+---------------------------------------------------------------------
+vim.api.nvim_create_autocmd("InsertLeave", {
+  callback = function()
+    hangul_mode = false
+    last_k, last_e = 0, 0
+  end,
+})
 
 return M
