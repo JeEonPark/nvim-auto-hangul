@@ -1,24 +1,60 @@
 local M = {}
 
--- Korean keyboard layout mapping (2-beolsik)
+-- 2-beolsik keyboard mapping
+-- Consonants (초성/종성)
+local CONS_MAP = {
+  r = "ㄱ", R = "ㄲ", rt = "ㄳ",
+  s = "ㄴ", sw = "ㄵ", sg = "ㄶ",
+  e = "ㄷ", E = "ㄸ",
+  f = "ㄹ", fr = "ㄺ", fa = "ㄻ", fq = "ㄼ", ft = "ㄽ", fx = "ㄾ", fv = "ㄿ", fg = "ㅀ",
+  a = "ㅁ",
+  q = "ㅂ", Q = "ㅃ", qt = "ㅄ",
+  t = "ㅅ", T = "ㅆ",
+  d = "ㅇ",
+  w = "ㅈ", W = "ㅉ",
+  c = "ㅊ",
+  z = "ㅋ",
+  x = "ㅌ",
+  v = "ㅍ",
+  g = "ㅎ"
+}
+
+-- Vowels (중성)
+local VOWEL_MAP = {
+  k = "ㅏ", o = "ㅐ", i = "ㅑ", O = "ㅒ",
+  j = "ㅓ", p = "ㅔ", u = "ㅕ", P = "ㅖ",
+  h = "ㅗ", hk = "ㅘ", ho = "ㅙ", hl = "ㅚ",
+  y = "ㅛ",
+  n = "ㅜ", nj = "ㅝ", np = "ㅞ", nl = "ㅟ",
+  b = "ㅠ",
+  m = "ㅡ", ml = "ㅢ",
+  l = "ㅣ"
+}
+
+-- Unicode indices for Hangul composition
 local CHO = {
-  r = 0, R = 1, s = 2, e = 3, E = 4, f = 5, a = 6, q = 7, Q = 8,
-  t = 9, T = 10, d = 11, w = 12, W = 13, c = 14, z = 15, x = 16,
-  v = 17, g = 18
+  ["ㄱ"] = 0, ["ㄲ"] = 1, ["ㄴ"] = 2, ["ㄷ"] = 3, ["ㄸ"] = 4,
+  ["ㄹ"] = 5, ["ㅁ"] = 6, ["ㅂ"] = 7, ["ㅃ"] = 8, ["ㅅ"] = 9,
+  ["ㅆ"] = 10, ["ㅇ"] = 11, ["ㅈ"] = 12, ["ㅉ"] = 13, ["ㅊ"] = 14,
+  ["ㅋ"] = 15, ["ㅌ"] = 16, ["ㅍ"] = 17, ["ㅎ"] = 18
 }
 
 local JUNG = {
-  k = 0, o = 1, i = 2, O = 3, j = 4, p = 5, u = 6, P = 7, h = 8,
-  hk = 9, ho = 10, y = 11, n = 12, nj = 13, np = 14, nl = 15,
-  b = 16, m = 17, ml = 18, l = 19
+  ["ㅏ"] = 0, ["ㅐ"] = 1, ["ㅑ"] = 2, ["ㅒ"] = 3, ["ㅓ"] = 4,
+  ["ㅔ"] = 5, ["ㅕ"] = 6, ["ㅖ"] = 7, ["ㅗ"] = 8, ["ㅘ"] = 9,
+  ["ㅙ"] = 10, ["ㅚ"] = 11, ["ㅛ"] = 12, ["ㅜ"] = 13, ["ㅝ"] = 14,
+  ["ㅞ"] = 15, ["ㅟ"] = 16, ["ㅠ"] = 17, ["ㅡ"] = 18, ["ㅢ"] = 19,
+  ["ㅣ"] = 20
 }
 
 local JONG = {
   [""] = -1,
-  r = 0, R = 1, rt = 2, s = 3, sw = 4, sg = 5, e = 6, f = 7, fr = 8,
-  fa = 9, fq = 10, ft = 11, fx = 12, fv = 13, fg = 14, a = 15, q = 16,
-  qt = 17, t = 18, T = 19, d = 20, w = 21, c = 22, z = 23, x = 24,
-  v = 25, g = 26
+  ["ㄱ"] = 0, ["ㄲ"] = 1, ["ㄳ"] = 2, ["ㄴ"] = 3, ["ㄵ"] = 4,
+  ["ㄶ"] = 5, ["ㄷ"] = 6, ["ㄹ"] = 7, ["ㄺ"] = 8, ["ㄻ"] = 9,
+  ["ㄼ"] = 10, ["ㄽ"] = 11, ["ㄾ"] = 12, ["ㄿ"] = 13, ["ㅀ"] = 14,
+  ["ㅁ"] = 15, ["ㅂ"] = 16, ["ㅄ"] = 17, ["ㅅ"] = 18, ["ㅆ"] = 19,
+  ["ㅇ"] = 20, ["ㅈ"] = 21, ["ㅊ"] = 22, ["ㅋ"] = 23, ["ㅌ"] = 24,
+  ["ㅍ"] = 25, ["ㅎ"] = 26
 }
 
 -- Unicode Hangul composition
@@ -26,17 +62,17 @@ local JONG = {
 -- Formula: ((cho * 21) + jung) * 28 + jong + 1 + 0xAC00
 local function compose_hangul(cho, jung, jong)
   jong = jong or -1
-  return utf8.char(((cho * 21 + jung) * 28 + jong + 1) + 0xAC00)
+  return vim.fn.nr2char(((cho * 21 + jung) * 28 + jong + 1) + 0xAC00)
 end
 
--- Check if character is Korean consonant
-local function is_cho(c)
-  return CHO[c] ~= nil
+-- Check if key is a consonant key
+local function is_consonant_key(c)
+  return CONS_MAP[c] ~= nil
 end
 
--- Check if character is Korean vowel
-local function is_jung(c)
-  return JUNG[c] ~= nil
+-- Check if key is a vowel key
+local function is_vowel_key(c)
+  return VOWEL_MAP[c] ~= nil
 end
 
 -- Korean romanization to Hangul conversion
@@ -48,68 +84,87 @@ local function roman_to_hangul(word)
   while i <= len do
     local c = word:sub(i, i)
 
-    if is_cho(c) then
-      local cho_idx = CHO[c]
-      local jung_start = i + 1
+    -- Must start with consonant
+    if is_consonant_key(c) then
+      local cho = CONS_MAP[c]
+      i = i + 1
 
-      -- Find vowel
-      if jung_start <= len then
-        local jung_candidate = word:sub(jung_start, jung_start)
-        local jung_idx = nil
+      -- Try to find vowel
+      local jung = nil
+      local vowel_len = 0
 
-        -- Check for compound vowel (2 chars)
-        if jung_start + 1 <= len then
-          local two_char = word:sub(jung_start, jung_start + 1)
-          if JUNG[two_char] then
-            jung_idx = JUNG[two_char]
-            jung_start = jung_start + 1
+      -- Try 2-char vowel first
+      if i + 1 <= len then
+        local two_char = word:sub(i, i + 1)
+        if VOWEL_MAP[two_char] then
+          jung = VOWEL_MAP[two_char]
+          vowel_len = 2
+        end
+      end
+
+      -- Try 1-char vowel
+      if not jung and i <= len then
+        local one_char = word:sub(i, i)
+        if VOWEL_MAP[one_char] then
+          jung = VOWEL_MAP[one_char]
+          vowel_len = 1
+        end
+      end
+
+      if jung then
+        i = i + vowel_len
+
+        -- Try to find final consonant (jong)
+        local jong = nil
+        local jong_len = 0
+
+        -- Try 2-char final consonant
+        if i + 1 <= len then
+          local two_char = word:sub(i, i + 1)
+          if CONS_MAP[two_char] then
+            -- Check if next char is a vowel (if so, this is next syllable's cho)
+            local next_pos = i + 2
+            if next_pos > len or not is_vowel_key(word:sub(next_pos, next_pos)) then
+              jong = CONS_MAP[two_char]
+              jong_len = 2
+            end
           end
         end
 
-        -- Single vowel
-        if not jung_idx and JUNG[jung_candidate] then
-          jung_idx = JUNG[jung_candidate]
-        end
-
-        if jung_idx then
-          local jong_start = jung_start + 1
-          local jong_idx = nil
-
-          -- Find final consonant
-          if jong_start <= len then
-            local jong_candidate = word:sub(jong_start, jong_start)
-
-            -- Check for compound final consonant (2 chars)
-            if jong_start + 1 <= len then
-              local two_char = word:sub(jong_start, jong_start + 1)
-              if JONG[two_char] then
-                jong_idx = JONG[two_char]
-                jong_start = jong_start + 1
-              end
-            end
-
-            -- Single final consonant
-            if not jong_idx and JONG[jong_candidate] then
-              -- Make sure next char is not a vowel (if it is, this consonant is next syllable's cho)
-              if jong_start + 1 > len or not is_jung(word:sub(jong_start + 1, jong_start + 1)) then
-                jong_idx = JONG[jong_candidate]
-              end
+        -- Try 1-char final consonant
+        if not jong and i <= len then
+          local one_char = word:sub(i, i)
+          if CONS_MAP[one_char] then
+            -- Check if next char is a vowel (if so, this is next syllable's cho)
+            local next_pos = i + 1
+            if next_pos > len or not is_vowel_key(word:sub(next_pos, next_pos)) then
+              jong = CONS_MAP[one_char]
+              jong_len = 1
             end
           end
+        end
 
+        if jong then
+          i = i + jong_len
+        end
+
+        -- Compose syllable
+        local cho_idx = CHO[cho]
+        local jung_idx = JUNG[jung]
+        local jong_idx = jong and JONG[jong] or -1
+
+        if cho_idx and jung_idx then
           table.insert(result, compose_hangul(cho_idx, jung_idx, jong_idx))
-          i = jong_idx and jong_start + 1 or jung_start + 1
         else
-          -- No vowel found, just add the consonant
+          -- Fallback: just add the characters
           table.insert(result, c)
-          i = i + 1
         end
       else
+        -- No vowel found, just add the consonant
         table.insert(result, c)
-        i = i + 1
       end
     else
-      -- Not a consonant, just add it
+      -- Not a consonant key, just add it
       table.insert(result, c)
       i = i + 1
     end
