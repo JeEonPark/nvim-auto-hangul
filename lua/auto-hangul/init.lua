@@ -102,52 +102,80 @@ end
 -- 모드 전환
 ---------------------------------------------------------------------
 local hangul_mode = false
-local last_k, last_e = 0, 0
-local THRESHOLD = 300
-local function now_ms() return math.floor(vim.loop.hrtime()/1e6) end
+local pending_k = false
+local pending_e = false
+local THRESHOLD = 200 -- ms
+local function now_ms() return math.floor(vim.loop.hrtime() / 1e6) end
 
+-- 🧠 k 입력 처리
 vim.keymap.set("i", "k", function()
-  vim.api.nvim_feedkeys("k", "n", true)
-  vim.schedule(function()
-    local t = now_ms()
-    if t - last_k <= THRESHOLD then
+  local current_time = now_ms()
+
+  if pending_k then
+    -- 두 번째 k → Hangul Mode 전환
+    pending_k = false
+    -- 이전 k는 출력하지 않음, 둘 다 제거
+    local line = vim.api.nvim_get_current_line()
+    local col = vim.fn.col(".")
+    local before = line:sub(1, col - 3)
+    local after = line:sub(col)
+    vim.api.nvim_set_current_line(before .. after)
+    vim.fn.cursor(0, #before + 1)
+    hangul_mode = true
+    vim.notify("Hangul Mode", vim.log.levels.INFO)
+    return
+  end
+
+  -- 첫 번째 k → 잠시 보류
+  pending_k = true
+  local this_k_time = current_time
+
+  -- 200ms 뒤에 아직 두 번째 k가 없으면 k 삽입
+  vim.defer_fn(function()
+    if pending_k and now_ms() - this_k_time >= THRESHOLD then
+      pending_k = false
+      local row, col = unpack(vim.api.nvim_win_get_cursor(0))
       local line = vim.api.nvim_get_current_line()
-      local col = vim.fn.col(".")
-      if col > 2 and line:sub(col - 2, col - 1) == "kk" then
-        local before = line:sub(1, col - 3)
-        local after = line:sub(col)
-        vim.api.nvim_set_current_line(before .. after)
-        vim.fn.cursor(0, #before + 1)
-        hangul_mode = true
-        vim.notify("Hangul Mode", vim.log.levels.INFO)
-      end
-      last_k = 0
-    else
-      last_k = t
+      local before = line:sub(1, col)
+      local after = line:sub(col + 1)
+      vim.api.nvim_set_current_line(before .. "k" .. after)
+      vim.api.nvim_win_set_cursor(0, { row, col + 1 })
     end
-  end)
+  end, THRESHOLD)
 end, { noremap = true, silent = true })
 
+-- 🧠 e 입력 처리
 vim.keymap.set("i", "e", function()
-  vim.api.nvim_feedkeys("e", "n", true)
-  vim.schedule(function()
-    local t = now_ms()
-    if t - last_e <= THRESHOLD then
+  local current_time = now_ms()
+
+  if pending_e then
+    -- 두 번째 e → English Mode 전환
+    pending_e = false
+    local line = vim.api.nvim_get_current_line()
+    local col = vim.fn.col(".")
+    local before = line:sub(1, col - 3)
+    local after = line:sub(col)
+    vim.api.nvim_set_current_line(before .. after)
+    vim.fn.cursor(0, #before + 1)
+    hangul_mode = false
+    vim.notify("English Mode", vim.log.levels.INFO)
+    return
+  end
+
+  pending_e = true
+  local this_e_time = current_time
+
+  vim.defer_fn(function()
+    if pending_e and now_ms() - this_e_time >= THRESHOLD then
+      pending_e = false
+      local row, col = unpack(vim.api.nvim_win_get_cursor(0))
       local line = vim.api.nvim_get_current_line()
-      local col = vim.fn.col(".")
-      if col > 2 and line:sub(col - 2, col - 1) == "ee" then
-        local before = line:sub(1, col - 3)
-        local after = line:sub(col)
-        vim.api.nvim_set_current_line(before .. after)
-        vim.fn.cursor(0, #before + 1)
-        hangul_mode = false
-        vim.notify("English Mode", vim.log.levels.INFO)
-      end
-      last_e = 0
-    else
-      last_e = t
+      local before = line:sub(1, col)
+      local after = line:sub(col + 1)
+      vim.api.nvim_set_current_line(before .. "e" .. after)
+      vim.api.nvim_win_set_cursor(0, { row, col + 1 })
     end
-  end)
+  end, THRESHOLD)
 end, { noremap = true, silent = true })
 
 ---------------------------------------------------------------------
