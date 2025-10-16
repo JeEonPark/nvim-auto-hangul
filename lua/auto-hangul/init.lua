@@ -161,9 +161,27 @@ local function try_convert_hangul(word)
           if jong_candidate then
             -- Check if next char is a vowel (if so, this is next syllable's cho)
             local next_pos = i + 1
-            if next_pos > len or not is_vowel_key(word:sub(next_pos, next_pos)) then
+            local next_char = word:sub(next_pos, next_pos)
+
+            if next_pos > len then
+              -- End of word, this is jong
               jong = jong_candidate
               jong_len = 1
+            elseif is_vowel_key(next_char) then
+              -- Next is vowel, can't be jong
+              jong = nil
+            elseif is_consonant_key(next_char) then
+              -- Next is consonant, check if that consonant + following char makes a syllable
+              local next_next_pos = next_pos + 1
+              local next_next_char = word:sub(next_next_pos, next_next_pos)
+              if next_next_pos <= len and is_vowel_key(next_next_char) then
+                -- Next consonant has a vowel after it, so current char is NOT jong
+                jong = nil
+              else
+                -- Next consonant doesn't have vowel, so current char IS jong
+                jong = jong_candidate
+                jong_len = 1
+              end
             end
           end
         end
