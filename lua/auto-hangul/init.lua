@@ -242,60 +242,117 @@ function M.convert_last_word()
   vim.fn.cursor(0, new_col)
 end
 
--- Convert all words in text to Hangul
-local function convert_text_to_hangul(text)
-  local result = {}
+-- Mode state
+local hangul_mode = false
+local last_key_time = 0
+local last_key_char = ""
+local TOGGLE_THRESHOLD = 200 -- milliseconds
 
-  -- Split by spaces and convert each word
-  for word in text:gmatch("%S+") do
-    local converted = roman_to_hangul(word)
-    table.insert(result, converted)
+-- Auto-convert on Space in Hangul mode
+M.auto_convert = function()
+  if not hangul_mode then
+    return false
   end
 
-  return table.concat(result, " ")
-end
+  local word, start_pos = get_last_word()
+  if word == "" or #word == 0 then
+    return false
+  end
 
--- Keymap: trigger conversion with 'kk...kk'
-vim.keymap.set("i", "k", function()
+  local converted = roman_to_hangul(word)
+  if converted == word then
+    return false
+  end
+
+  -- Replace word before cursor
   local line = vim.api.nvim_get_current_line()
   local col = vim.fn.col(".")
-  local before = line:sub(1, col - 1)
+  local before = line:sub(1, start_pos)
+  local after = line:sub(col)
+  local new_line = before .. converted .. after
 
-  -- Check if last character is 'k' (this would be second 'k')
-  if before:sub(-1) == "k" then
-    -- Look for opening 'kk' before this position
-    local before_first_k = before:sub(1, -2)
+  vim.api.nvim_set_current_line(new_line)
 
-    -- Find the last occurrence of 'kk' before current position
-    local start_pos = before_first_k:reverse():find("kk")
+  -- Adjust cursor position
+  local new_col = start_pos + #converted + 1
+  vim.fn.cursor(0, new_col)
 
-    if start_pos then
-      -- Calculate actual position (reverse search)
-      start_pos = #before_first_k - start_pos - 1
+  return true
+end
 
-      -- Extract text between kk markers
-      local text_between = before_first_k:sub(start_pos + 3) -- +3 to skip the 'kk'
+-- Toggle Hangul mode with 'kk'
+vim.keymap.set("i", "k", function()
+  local current_time = vim.loop.now()
+  local time_diff = current_time - last_key_time
 
-      if text_between ~= "" then
-        -- Convert the text
-        local converted = convert_text_to_hangul(text_between)
+  -- Check for fast 'kk'
+  if last_key_char == "k" and time_diff <= TOGGLE_THRESHOLD then
+    -- Remove the previous 'k'
+    local line = vim.api.nvim_get_current_line()
+    local col = vim.fn.col(".")
+    local before = line:sub(1, col - 2)
+    local after = line:sub(col)
+    vim.api.nvim_set_current_line(before .. after)
+    vim.fn.cursor(0, col - 1)
 
-        -- Replace 'kk...text...kk' with converted text
-        local after = line:sub(col)
-        local new_line = before_first_k:sub(1, start_pos) .. converted .. after
+    -- Toggle to Hangul mode
+    hangul_mode = true
+    vim.notify("Hangul Mode", vim.log.levels.INFO)
 
-        vim.api.nvim_set_current_line(new_line)
-
-        -- Set cursor after converted text
-        local new_col = start_pos + #converted + 1
-        vim.fn.cursor(0, new_col)
-        return
-      end
-    end
+    last_key_char = ""
+    last_key_time = 0
+    return
   end
 
-  -- Default: just insert 'k'
+  last_key_char = "k"
+  last_key_time = current_time
   vim.api.nvim_feedkeys("k", "n", true)
 end, { noremap = true, silent = true })
+
+-- Toggle English mode with 'ee'
+vim.keymap.set("i", "e", function()
+  local current_time = vim.loop.now()
+  local time_diff = current_time - last_key_time
+
+  -- Check for fast 'ee'
+  if last_key_char == "e" and time_diff <= TOGGLE_THRESHOLD then
+    -- Remove the previous 'e'
+    local line = vim.api.nvim_get_current_line()
+    local col = vim.fn.col(".")
+    local before = line:sub(1, col - 2)
+    local after = line:sub(col)
+    vim.api.nvim_set_current_line(before .. after)
+    vim.fn.cursor(0, col - 1)
+
+    -- Toggle to English mode
+    hangul_mode = false
+    vim.notify("English Mode", vim.log.levels.INFO)
+
+    last_key_char = ""
+    last_key_time = 0
+    return
+  end
+
+  last_key_char = "e"
+  last_key_time = current_time
+  vim.api.nvim_feedkeys("e", "n", true)
+end, { noremap = true, silent = true })
+
+-- Auto-convert on Space in Hangul mode
+vim.keymap.set("i", "<Space>", function()
+  if hangul_mode then
+    M.auto_convert()
+  end
+  vim.api.nvim_feedkeys(" ", "n", true)
+end, { noremap = true, silent = true })
+
+-- Reset mode when leaving insert mode
+vim.api.nvim_create_autocmd("InsertLeave", {
+  callback = function()
+    hangul_mode = false
+    last_key_char = ""
+    last_key_time = 0
+  end,
+})
 
 return M
