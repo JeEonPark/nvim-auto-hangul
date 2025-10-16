@@ -75,8 +75,26 @@ local function is_vowel_key(c)
   return VOWEL_MAP[c] ~= nil
 end
 
+-- Check if word can be converted to Hangul (must have at least one Korean pattern)
+local function can_be_hangul(word)
+  -- Check if there's at least one consonant followed by a vowel
+  for i = 1, #word - 1 do
+    local c = word:sub(i, i)
+    local next_c = word:sub(i + 1, i + 1)
+    if is_consonant_key(c) and is_vowel_key(next_c) then
+      return true
+    end
+  end
+  return false
+end
+
 -- Korean romanization to Hangul conversion
 local function roman_to_hangul(word)
+  -- If word cannot be Hangul, return as-is
+  if not can_be_hangul(word) then
+    return word
+  end
+
   local result = {}
   local i = 1
   local len = #word
@@ -87,6 +105,7 @@ local function roman_to_hangul(word)
     -- Must start with consonant
     if is_consonant_key(c) then
       local cho = CONS_MAP[c]
+      local start_i = i
       i = i + 1
 
       -- Try to find vowel
@@ -156,11 +175,11 @@ local function roman_to_hangul(word)
         if cho_idx and jung_idx then
           table.insert(result, compose_hangul(cho_idx, jung_idx, jong_idx))
         else
-          -- Fallback: just add the characters
+          -- Fallback: just add the original characters
           table.insert(result, c)
         end
       else
-        -- No vowel found, just add the consonant
+        -- No vowel found, add original character and continue
         table.insert(result, c)
       end
     else
